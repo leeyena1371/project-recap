@@ -1,0 +1,16 @@
+spring:
+  profiles:
+    active: prod
+    include: common
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/recap
+    username: root
+    password: qwer1234

@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="co.dearu.live.api.domain.coin.repository.CoinDao">
+
+    <select id="getMyTotalCoin" parameterType= 'String' resultType="int">
+        SELECT
+        <choose>
+            <when test='osType == 1'>
+                IFNULL(SUM(appleCoin),0) AS totalCoinPoint
+            </when>
+            <when test='osType == 0'>
+                IFNULL(SUM(googleCoin),0) AS totalCoinPoint
+            </when>
+            <when test='osType == 2'>
+                IFNULL(SUM(webCoin),0) AS totalCoinPoint
+            </when>
+            <otherwise>
+                0 AS totalCoinPoint
+            </otherwise>
+        </choose>
+         FROM dstore.tblStoreUserTotalPoint
+        WHERE externalID = #{userIdx}
+          AND deleteDT='0000-00-00 00:00:00'
+        ORDER BY regDT DESC
+        LIMIT 1
+    </select>
+
+    <select id="getCoinList" parameterType= 'co.dearu.live.api.domain.coin.vo.CoinListParamVO' resultType="co.dearu.live.api.domain.coin.vo.CoinListVO">
+        SELECT p.productID,pln.productName,cpu.coinPoint
+        <choose>
+            <when test='lang == "ko"'>
+                ,TRIM(TRAILING '.0' FROM cpu.korPrice) AS price
+             -- ,FORMAT(cpu.korPrice,'##0.##') AS price -- FORMAT으로 하니 콤마(#,###)가 생겨서 변경
+             -- ,TRUNCATE(cpu.korPrice,0) AS price -- 숫자 형식이라 결국 .0이 생겨서 변경
+            </when>
+            <otherwise>
+                , cpu.globalPrice AS price
+            </otherwise>
+        </choose>
+        FROM dstore.tblProduct AS p
+                 LEFT JOIN dstore.tblProductMarket AS pm ON (p.productID = pm.productID)
+                 LEFT JOIN dstore.tblProductOption AS po ON (p.productID = po.productID)
+                 LEFT JOIN dstore.tblProductOptionPrice AS pop ON (po.optionID = pop.optionID)
+                 LEFT JOIN dstore.tblCoinPriceUnit AS cpu ON (pop.OSCode = cpu.OSCode AND pop.coinPriceUnitIDX = cpu.coinPriceUnitIDX)
+                 LEFT JOIN dstore.tblProductL10N AS pln ON (p.productID = pln.productID AND pln.langCode = 'KO')
+        WHERE p.productType=3
+          AND pm.marketCode =  #{marketCode}
+          AND p.paymentType = 3
+          AND pop.OSCode = #{OSCode}
+          AND ((p.saleStartDT <![CDATA[ <= ]]> now() AND p.saleEndDT >= now()) OR (p.saleEndDT = '0000-00-00 00:00:00'))
+          AND (po.limitCNTFlag = 0 OR (po.limitCNTFlag = 1 AND po.stockCNT >= 1))
+          AND p.deleteDT = '0000-00-00 00:00:00'
+          AND pop.deleteDT = '0000-00-00 00:00:00'
+          AND pm.deleteDT = '0000-00-00 00:00:00'
+          AND p.appGroup = #{appGroup}
+          AND p.productStatus = '2'
+        ORDER BY CAST(cpu.coinPoint AS unsigned)
+    </select>
+
+</mapper>
+
+

@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="co.dearu.live.api.domain.item.repository.ItemDao">
+
+    <select id="getItemArtistInfo" parameterType= 'String' resultType="co.dearu.live.api.domain.item.vo.ItemArtistInfoVO">
+        SELECT IFNULL(tPSTP.liveIPKey, tPSTP.profileKey) AS artistIP, tPST.cardBackgroundColor AS groupColor
+          FROM dstore.tblProductStarTalkProfile tPSTP
+          LEFT JOIN tblProductStarTalk tPST ON tPSTP.productID = tPST.productID
+         WHERE tPSTP.staruseridx = #{starUserIdx}
+           AND tPSTP.useFlag = 1
+           AND tPSTP.deleteFlag= 0
+           AND tPSTP.deleteDT = '0000-00-00 00:00:00'
+         ORDER BY tPSTP.regDT desc
+         LIMIT 1
+    </select>
+
+    <select id="getItemUseCount" parameterType= 'co.dearu.live.api.domain.item.vo.ItemUseCheckParamVO' resultType="int">
+        SELECT IF(count(idx)>0, 2, 1) AS authorityFlag
+          FROM dstore.tblLiveItemTransactionLog
+         WHERE useridx = #{userIdx}
+           AND liveID = #{liveID}
+           AND transactionType = 'o'
+    </select>
+
+    <select id="getItemPossession" parameterType= 'co.dearu.live.api.domain.item.vo.ItemUseCheckParamVO' resultType="co.dearu.live.api.domain.item.vo.ItemTransactionLogVO">
+        SELECT tLITL.count, tLITL.usedCount
+        FROM dstore.tblLiveItemTransactionLog AS tLITL
+                 JOIN dstore.tblUserLiveItemInfo tULII ON tLITL.useridx = tULII.useridx AND tLITL.productID = tULII.productID
+                 JOIN dstore.tblProductLiveItem AS tPLI ON tLITL.productID = tPLI.productID AND tULII.appGroup = tPLI.appGroup
+                 JOIN dstore.tblProductStarTalkProfile AS tPSTP ON (tPLI.starTalkProductID = tPSTP.productID AND tPSTP.staruseridx = #{starUserIdx})
+        WHERE tLITL.useridx = #{userIdx}
+          AND tLITL.transactionType = 'c'
+          AND tLITL.expireDT > now()
+          AND tULII.appGroup = #{appGroup}
+          AND tULII.useFlag = 1
+          AND tPSTP.useFlag = 1
+          AND tPSTP.deleteFlag= 0
+          AND tPSTP.deleteDT = '0000-00-00 00:00:00'
+          AND (tULII.deleteDT = '0000-00-00 00:00:00' OR tULII.deleteDT IS NULL)
+          AND (tPLI.deleteDT = '0000-00-00 00:00:00' OR tPLI.deleteDT IS NULL)
+        ORDER BY tLITL.count - tLITL.usedCount desc
+        LIMIT 1
+    </select>
+
+    <select id="getItemTransactionLog" parameterType= 'co.dearu.live.api.domain.item.vo.ItemUseCheckParamVO' resultType="co.dearu.live.api.domain.item.vo.ItemTransactionLogVO">
+        SELECT tLITL.idx, tLITL.count, tLITL.usedCount, tLITL.useridx, tLITL.staruseridx, tLITL.liveID, tLITL.productID
+             , tLITL.orderID, tLITL.OSCode, tLITL.transactionType, tLITL.regDT, tLITL.updateDT, tLITL.expireDT
+          FROM dstore.tblLiveItemTransactionLog AS tLITL
+          JOIN dstore.tblUserLiveItemInfo tULII ON tLITL.useridx = tULII.useridx AND tLITL.productID = tULII.productID
+          JOIN dstore.tblProductLiveItem AS tPLI ON tLITL.productID = tPLI.productID AND tULII.appGroup = tPLI.appGroup
+          JOIN dstore.tblProductStarTalkProfile AS tPSTP ON (tPLI.starTalkProductID = tPSTP.productID AND tPSTP.staruseridx = #{starUserIdx})
+         WHERE tLITL.useridx = #{userIdx}
+           AND tLITL.transactionType = 'c'
+           AND tLITL.expireDT > now()
+           AND tULII.appGroup = #{appGroup}
+           AND tULII.useFlag = 1
+           AND tPSTP.useFlag = 1
+           AND tPSTP.deleteFlag= 0
+           AND tPSTP.deleteDT = '0000-00-00 00:00:00'
+           AND (tULII.deleteDT = '0000-00-00 00:00:00' OR tULII.deleteDT IS NULL)
+           AND (tPLI.deleteDT = '0000-00-00 00:00:00' OR tPLI.deleteDT IS NULL)
+           AND tLITL.count - tLITL.usedCount > 0
+         ORDER BY expireDT, regDT
+         LIMIT 1
+    </select>
+
+    <insert id="insertItemTransactionLog" parameterType= 'co.dearu.live.api.domain.item.vo.ItemTransactionLogVO'>
+        INSERT INTO dstore.tblLiveItemTransactionLog
+        ( pIdx, count, usedCount, useridx, staruseridx, liveID, productID, orderID, OSCode, transactionType, regDT, updateDT, expireDT )
+        VALUES ( #{idx}, -1, 0, #{useridx}, #{staruseridx}, #{liveID}, #{productID}, #{orderID}, #{OSCode}, 'o', now(), now(), '0000-00-00 00:00:00' )
+    </insert>
+
+    <update id="updateItemTransactionLog" parameterType= 'co.dearu.live.api.domain.item.vo.ItemTransactionLogVO'>
+        UPDATE dstore.tblLiveItemTransactionLog
+           SET usedCount = #{usedCount}
+             , updateDT = now()
+         WHERE useridx = #{useridx}
+           AND orderID = #{orderID}
+           AND productID = #{productID}
+           AND transactionType = 'c'
+    </update>
+
+    <select id="getItemList" parameterType= 'co.dearu.live.api.domain.item.vo.ItemListParamVO' resultType="co.dearu.live.api.domain.item.vo.ItemListVO">
+        SELECT tP.productID, tPO.optionID, tPLI.starTalkProductID, replace(IFNULL(#{msg},'0회권'), '0' ,tLU.availableCount) as optionName
+             , CASE WHEN (tPOP.eventDiscountStartDT <![CDATA[ <= ]]>  now() AND tPOP.eventDiscountEndDT >= now() AND tPOP.eventDiscountPrice > 0)
+                    THEN tPOP.eventDiscountPrice
+                    ELSE tPOP.salePrice
+                END AS salePrice
+        FROM dstore.tblProduct AS tP
+                 LEFT JOIN dstore.tblProductLiveItem AS tPLI ON (tP.productID = tPLI.productID AND tP.appGroup = tPLI.appGroup)
+                 LEFT JOIN dstore.tblProductStarTalkProfile AS tPSTP ON (tPLI.starTalkProductID = tPSTP.productID AND tPSTP.staruseridx = #{starUserIdx})
+                 LEFT JOIN dstore.tblProductOption AS tPO ON (tP.productID = tPO.productID AND tP.appGroup = tPO.appGroup)
+                 LEFT JOIN dstore.tblProductOptionPrice AS tPOP ON (tPO.optionID = tPOP.optionID)
+                 LEFT JOIN dstore.tblLiveUnit AS tLU ON (tPOP.OSCode = tLU.OSCode AND tPOP.liveUnitIDX = tLU.liveUnitIDX AND tP.appGroup = tLU.appGroup AND tP.exposureFlag = tLU.exposureFlag)
+        WHERE tP.productType=5
+          AND tP.paymentType = 1
+          AND tP.productStatus = 1
+          AND tP.appGroup = #{appGroup}
+          AND (tPO.limitCNTFlag = 0 OR (tPO.limitCNTFlag = 1 AND tPO.stockCNT >= 1))
+          AND tPOP.OSCode = 'ALL'
+          AND tP.exposureFlag = 1
+          AND tPSTP.useFlag = 1
+          AND tPSTP.deleteFlag= 0
+          AND ((tLU.serviceStartDT <![CDATA[ <= ]]>  now() AND tLU.serviceEndDT >= now()) OR (tLU.serviceEndDT = '0000-00-00 00:00:00'))
+          AND tP.deleteDT = '0000-00-00 00:00:00'
+          AND (tPLI.deleteDT = '0000-00-00 00:00:00' OR tPLI.deleteDT IS NULL)
+          AND tPO.deleteDT = '0000-00-00 00:00:00'
+          AND tPOP.deleteDT = '0000-00-00 00:00:00'
+          AND (tLU.deleteDT = '0000-00-00 00:00:00' OR tLU.deleteDT IS NULL)
+          AND tPSTP.deleteDT = '0000-00-00 00:00:00'
+        ORDER BY CAST(tLU.availableCount AS unsigned)
+    </select>
+
+    <select id="getGroupName" parameterType='co.dearu.live.api.domain.item.vo.ItemGroupNameVO' resultType="String">
+        SELECT productName as groupName
+         FROM dstore.tblProductL10N
+        WHERE productID = #{productID}
+          AND langCode = #{langCode}
+          AND deleteDT = '0000-00-00 00:00:00'
+    </select>
+
+    <select id="getStarUserReplayFlag" parameterType= 'String' resultType="int">
+        select if(ifnull(sum(tblProductStarTalk.liveReplayFlag), -1) = count(tblProductStarTalk.liveReplayFlag), 1, 0) as replayFlag
+        from dstore.tblProductStarTalk
+        where productID in (select tblProductStarTalkProfile.productID
+                            from dstore.tblProductStarTalkProfile
+                            where staruseridx = #{starUserIdx}
+        )
+    </select>
+
+    <select id="getLiveEnableStarUserIdxList" parameterType="String" resultType="co.dearu.live.api.domain.item.vo.ItemStarUserVO">
+        select staruseridx, starUser.nickname
+        from (select *
+              from dstore.tblProduct
+              where productStatus in ('2', '7')
+                and appGroup = #{appGroup}
+                and exposureFlag = 1
+                and productType = '4') as product
+                 inner join (select *
+                             from dstore.tblProductStarTalkProfile
+                             where useFlag = 1 and deleteFlag = 0 and isLiveEnable = 1) as starUser
+                            on product.productID = starUser.productID
+    </select>
+
+</mapper>
+
+
